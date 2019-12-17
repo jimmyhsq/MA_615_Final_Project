@@ -1,0 +1,289 @@
+---
+title: "MA 615 Final Project"
+author: "Shuoqi Huang"
+date: "12/13/2019"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,dev="png",fig.align  = 'center')
+pacman::p_load(ggplot2,knitr,arm,data.table,foreign,gridExtra,car,stringr,rstanarm,tidyverse,dplyr, plyr, leaflet,tidytext, tm, wordcloud, wordcloud2,htmltools, plotly,webshot,htmlwidgets,rgdal,sp,mapview, ggmap)
+```
+
+
+```{r,echo=FALSE, warning=F, include=F}
+## Load three forms of data
+airbnb_boston <- read_csv("tomslee_airbnb_boston_1429_2017-07-10.csv")
+
+text_data <- read_csv("Text.csv")
+clean_text_data <- text_data%>% dplyr::filter(number_of_reviews > 50)
+
+crime <- read_csv("Crime.csv")
+crime_2017 <- crime %>% dplyr::filter( YEAR == 2017 & OFFENSE_CODE_GROUP %in% c('HOME INVASION', 'Property Lost','Robbery'))
+
+crime_2017 <- crime_2017 %>% dplyr::filter(!INCIDENT_NUMBER %in% c('I182015290', 'I172103170', 'I172098101', 'I172092567', 'I172049551') )
+
+write.csv(crime_2017,file= "crime_2017.csv",row.names=FALSE)
+
+
+## Filter number of reviews that is greater than 50.
+Clean_airbnb_boston <- airbnb_boston %>% dplyr::filter(reviews > 50)
+
+write.csv(Clean_airbnb_boston, file = "Clean_airbnb_boston.csv",row.names=FALSE)
+
+```
+    
+### A. Distribution of price in Boston area.  
+```{r, echo = FALSE}
+
+## Let us see how many neighborhoods does this data include? 
+Clean_airbnb_boston$neighborhood <- as.factor(Clean_airbnb_boston$neighborhood)
+
+plot_jitter <- ggplot(data  = Clean_airbnb_boston, aes(x = neighborhood, y = price, col = neighborhood),)+
+  geom_point(size = 1.2, alpha = .8)+
+  geom_jitter()+
+  labs(x = "Neighborhood", y = "Price", title = "Neighborhood vs. Price")+
+  theme_bw()+ theme(axis.text.x = element_text(angle = 45, hjust  = 1),legend.position = "none")
+plot_jitter 
+
+```
+
+
+```{r, echo = F}
+## Let us see the distribution of price in Boston area.
+plot_price <- ggplot(data = Clean_airbnb_boston, aes(x =price, fill = neighborhood) )+
+  geom_density(alpha= 0.5, show.legend = FALSE)+
+  ##geom_bar( position = "dodge", stat = "count",show.legend = FALSE) +
+  labs( x = "Price", title = "Distribution of price in in Boston area")+ 
+  theme_bw()
+ggplotly(plot_price)
+
+```
+
+### B. Number of bedrooms vs. Price       
+```{r, echo = F }
+box_1 <- ggplot( Clean_airbnb_boston, aes(x= bedrooms , y=price, group = bedrooms, color = factor(bedrooms))) + 
+  geom_boxplot(show.legend = FALSE) +
+  labs( title = "Box plot of bedrooms and price", x = "Number of bedrooms", y = "Price", color = "Number of bedrooms")+
+  theme_bw() 
+box_1
+```
+
+
+### C. Room type vs. Price     
+```{r, echo = F}
+box_2 <- ggplot(Clean_airbnb_boston, aes(x= room_type, y=price, group = room_type , color = factor(room_type))) +      geom_boxplot(show.legend = FALSE)+ 
+  labs( title = "Box plot of room type and price ", x = "Room type", y = "Price", color = "Room type")+ 
+  theme_bw() 
+box_2
+```
+
+### D. Overall satisfaction vs. Price      
+```{r, echo= F}
+box_3 <- ggplot( Clean_airbnb_boston, aes(x=overall_satisfaction  , y= price, group = overall_satisfaction , color =factor(overall_satisfaction))) + 
+  geom_boxplot(show.legend = FALSE) +
+  labs( title = "Box plot of satisfaction and price", x = "Overall satisfaction", y = "Price", color = "Overall satisfaction")+ 
+  theme_bw()
+
+box_3
+```
+
+## 3. Text analysis      
+### A. Text analysis on description on Airbnb
+```{r, echo = F , warning= F}
+## Build corpus 
+description_text  <- iconv(clean_text_data$description, to = "utf-8-mac")
+description_text  <- Corpus(VectorSource(description_text))
+
+
+## Clean text 
+## Change all letters to lowercase
+description_text <- tm_map(description_text,tolower)
+## remove Punctuation
+description_text <- tm_map(description_text,removePunctuation)
+## remove numbers
+description_text <- tm_map(description_text,removeNumbers)
+## Remove unnecessary words 
+Clean_description <- tm_map(description_text, removeWords, stopwords('english'))
+
+
+Clean_description <- tm_map(Clean_description, removeWords,c('boston','room', 'located','also','can','just','well','will'))
+
+Clean_description <- tm_map(Clean_description, stripWhitespace)
+
+tdm_description <- TermDocumentMatrix(Clean_description)
+tdm_description <- as.matrix(tdm_description)
+
+## Bar plots 
+
+count_tdm <- rowSums(tdm_description)
+count_tdm <- subset(count_tdm, count_tdm>= 150)
+count_tdm
+
+
+ barplot(count_tdm , las = 2, col = rainbow(60))
+
+## Word Cloud 
+Word_c <-  sort(count_tdm, decreasing = T)
+## set.seed(200)
+## wordcloud(words = names(Word_c), 
+        ## freq =  Word_c,
+         ##random.order = F, 
+        ## colors = brewer.pal(8, 'Dark2'), 
+         ##scale = c(5,0.3), 
+        ## )
+
+## Word Cloud2 
+Word2_c <- data.frame(names(Word_c), Word_c)
+colnames(Word2_c) <- c('word','freq')
+plot_2 <- wordcloud2(Word2_c,
+           size = 0.5,
+           shape = 'circle',
+          )
+plot_2
+
+## saveWidget(plot_2, "tmp.html", selfcontained = F)
+ ##webshot::install_phantomjs()
+##webshot("tmp.html", "wc1.png", delay = 5, vwidth = 1000, vheight = 1000)
+```
+
+### B. Text analysis on Space on Airbnb
+```{r, echo = F, warning= F}
+## Build corpus 
+space_text  <- iconv(clean_text_data$space, to = "utf-8-mac")
+space_text  <- Corpus(VectorSource(space_text))
+
+
+## Clean text 
+## Change all letters to lowercase
+space_text <- tm_map(space_text,tolower)
+## remove Punctuation
+space_text <- tm_map(space_text,removePunctuation)
+## remove numbers
+space_text <- tm_map(space_text,removeNumbers)
+## Remove unnecessary words 
+Clean_space <- tm_map(space_text, removeWords, stopwords('english'))
+Clean_space <- tm_map(Clean_space, removeWords, c('also', 'apartment','away','great', 'make','day', 'two','room','bedroom','boston','can','located','will','well', 'use','one'))
+
+Clean_space <- tm_map(Clean_space, stripWhitespace)
+
+tdm_space <- TermDocumentMatrix(Clean_space)
+tdm_space <- as.matrix(tdm_space)
+
+count_tdm_space <- rowSums(tdm_space)
+count_tdm_space <- subset(count_tdm_space, count_tdm_space>= 40 & count_tdm_space <= 180)
+count_tdm_space
+
+Word_c_space <-  sort(count_tdm_space, decreasing = T)
+Word2_c_space <- data.frame(names(Word_c_space), Word_c_space)
+colnames(Word2_c_space) <- c('word','freq')
+plot_3 <- wordcloud2(Word2_c_space,
+           size = 0.5,
+           shape = 'circle',
+          )
+plot_3
+
+##saveWidget(plot_3, "tmp.html", selfcontained = F)
+##webshot("tmp.html", "wc2.png", delay = 5, vwidth = 1000, vheight = 1000)
+```
+
+
+### C. Text analysis on Transit on Airbnb
+```{r, echo= F, warning= F }
+## Build corpus 
+transit_text  <- iconv(clean_text_data$transit, to = "utf-8-mac")
+transit_text  <- Corpus(VectorSource(transit_text))
+
+
+## Clean text 
+## Change all letters to lowercase
+transit_text <- tm_map(transit_text,tolower)
+## remove Punctuation
+transit_text <- tm_map(transit_text,removePunctuation)
+## remove numbers
+transit_text <- tm_map(transit_text,removeNumbers)
+## Remove unnecessary words 
+Clean_transit <- tm_map(transit_text, removeWords, stopwords('english'))
+Clean_transit <- tm_map(Clean_transit, removeWords, c('also', 'apartment','away','great', 'make','day', 'two','room','bedroom','boston','can','located','will','well', 'use','one', 'get'))
+
+
+
+Clean_transit <- tm_map(Clean_transit, stripWhitespace)
+
+tdm_transit <- TermDocumentMatrix(Clean_transit)
+tdm_transit <- as.matrix(tdm_transit)
+
+count_tdm_transit <- rowSums(tdm_transit)
+count_tdm_transit<- subset(count_tdm_transit, count_tdm_transit>= 80) 
+count_tdm_transit
+
+Word_c_transit <-  sort(count_tdm_transit, decreasing = T)
+Word2_c_transit <- data.frame(names(Word_c_transit), Word_c_transit)
+colnames(Word2_c_transit) <- c('word','freq')
+plot_4 <- wordcloud2(Word2_c_transit,
+           size = 0.5,
+           shape = 'circle',
+          )
+plot_4
+
+## saveWidget(plot_4, "tmp.html", selfcontained = F)
+## webshot("tmp.html", "wc3.png", delay = 5, vwidth = 1000, vheight = 1000)
+```
+
+
+## 4. Map     
+### A. Airbnb map 
+```{r, echo = F}
+## Map of airbnb 
+map_price <- Clean_airbnb_boston
+map_price$priceo <- cut(Clean_airbnb_boston$price, 
+                                 breaks = c(1,100,200,300,400,500,600),right = F, 
+                                 labels = c("Price[1,100)", "Price[100,200)", "Price[200,300)", "Price[300,400)", "Price[400,500)", "Price[500,600)"))
+ 
+pal <- colorFactor(palette = c("blue", "green", "yellow", "orange", "red", "maroon"), 
+                    domain = map_price$priceo) 
+
+a <-  leaflet(data = map_price) %>% 
+  addProviderTiles(providers$Esri.NatGeoWorldMap)%>%
+  addCircleMarkers(lng = ~ longitude, lat = ~ latitude,
+            color = ~ pal(priceo),
+            label = paste("Price = $", Clean_airbnb_boston$price,
+                          "Location = ", Clean_airbnb_boston$neighborhood), 
+            clusterOptions = markerClusterOptions()
+            )%>%
+  addLegend(position = "bottomright", 
+            pal = pal, 
+            values =  ~ priceo,
+            title = "Price")
+a 
+``` 
+
+
+### B. Crime  in Boston area
+```{r, echo = F, warning= F}
+
+
+bos_neigh <- readOGR("./Boston_Neighborhoods/", layer="Boston_Neighborhoods")
+bos_neigh <- spTransform(bos_neigh, CRS("+proj=longlat +datum=WGS84"))
+neigh_plot <- fortify(bos_neigh)
+
+
+register_google(key="AIzaSyBJjwFRgQ0wE3ZPGgvuDbB9SRwfTnRLea4")
+
+b <- ggmap(get_googlemap( center = c(lon = -71.070224, lat = 42.348488), 
+                         zoom = 12 ,
+                         maptype ='terrain', 
+                         color = 'color'))
+
+
+b  + geom_polygon(data=neigh_plot, aes(x=long, y=lat, group= group), 
+                   alpha=0.3, color="black", fill='red') + 
+                   ggtitle("Boston")+
+  geom_point(aes(x=Long, y=Lat), data=crime_2017, size=1.5, alpha=0.2, color="black")+
+  ggtitle("Boston Crime Report")
+
+
+```
