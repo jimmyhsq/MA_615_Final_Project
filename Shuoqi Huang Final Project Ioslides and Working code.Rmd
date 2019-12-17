@@ -278,7 +278,8 @@ bos_neigh <- spTransform(bos_neigh, CRS("+proj=longlat +datum=WGS84"))
 neigh_plot <- fortify(bos_neigh)
 
 ## Have to have Google API keys to access ggmap()
-register_google(key="AIzaSyBJjwFRgQ0wE3ZPGgvuDbB9SRwfTnRLea4")
+## Insert my API key here (I provided the key on Blackboard submission)
+register_google(key="my API key")
 
 ## Create a map 
 b <- ggmap(get_googlemap( center = c(lon = -71.070224, lat = 42.348488), 
