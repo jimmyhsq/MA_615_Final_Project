@@ -270,8 +270,8 @@ bos_neigh <- readOGR("./Boston_Neighborhoods/", layer="Boston_Neighborhoods")
 bos_neigh <- spTransform(bos_neigh, CRS("+proj=longlat +datum=WGS84"))
 neigh_plot <- fortify(bos_neigh)
 
-
-register_google(key="AIzaSyBJjwFRgQ0wE3ZPGgvuDbB9SRwfTnRLea4")
+## Insert my API key here
+register_google(key="My API key")
 
 b <- ggmap(get_googlemap( center = c(lon = -71.070224, lat = 42.348488), 
                          zoom = 12 ,
